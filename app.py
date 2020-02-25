@@ -26,9 +26,9 @@ def welcome():
         f"/api/v1.0/precipitation<br/>"
         f"/api/v1.0/stations<br>"
         f"/api/v1.0/tobs<br>"
-        f"/api/v1.0/start<br>"
-        f"/api/v1.0/start_end"
-    )
+        f"/api/v1.0/vacation/<br>"
+        f"To check vacation days for temperatures, please enter dates, e.g. /api/v1.0/vacation/start date/end date, format = (2017-mm-dd)")
+        
 
 @app.route("/api/v1.0/precipitation")
 def precipitation():
@@ -83,86 +83,32 @@ def tobs():
     
     return jsonify(observations)
 
-#__________________________________________________________________________________________________
-
-#This is the official solution for the last two pages tweaked to eliminate errors.  
-# It does not have the ability to take in a start or end date, and when run, 
-# it spits out one tuple of min. temp., avg. temp., and max.temp.
-
-# @app.route("/api/v1.0/start")
-# @app.route("/api/v1.0/start_end")
-# def stats(start = '', end = ''):
-#     session = Session(engine)
-#     sel = [func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)]
-#     if not end:
-#         results = session.query(*sel).filter(Measurement.date >= start).all()
-#         temps = list(np.ravel(results))
-#         return jsonify(temps)
-    
-#     results = session.query(*sel).filter(Measurement.date >= start).filter(Measurement.date <= end).all()
-#     temps = list(np.ravel(results))
-#     return jsonify(temps)
-#____________________________________________________________________________________________________
-
-#The following is my solution for the last two pages. It is ungainly, in that the input (dates) must be entered in 
-# the terminal, then the result can be viewed in the browser, but it does return the desired results.
-@app.route("/api/v1.0/start")
-def start():
 # Return a JSON list of the minimum temperature, the average temperature, and the max temperature for
 #  a given start or start-end range.
 # When given the start only, calculate `TMIN`, `TAVG`, and `TMAX` for all dates greater than and equal
 #  to the start date.
 # When given the start and the end date, calculate the `TMIN`, `TAVG`, and `TMAX` for dates between the
 #  start and end date inclusive.
+
+@app.route("/api/v1.0/vacation/<start>")
+@app.route("/api/v1.0/vacation/<start>/<end>")
+def vacation(start = '', end = ''):
     session = Session(engine)
-    def daily_normals(date):
-        sel = [func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs), Measurement.date]
-        return session.query(*sel, Measurement.date).filter(func.strftime("%m-%d", Measurement.date) == date).all()
-    start_date = input('When will your vacation begin? (yyyy-mm-dd)')
-    end_date = '2017-08-24'
-    t_dates = pd.to_datetime(np.arange(start_date,end_date, dtype='datetime64'))
-    tr_dates = []
-    for date in t_dates:
-        tr_dates.append(dt.datetime.strftime(date, "%m-%d"))
-    normals = []
-    for date in tr_dates:
-        normals.append(daily_normals(date))
-    days = []
-    totals = {}
-    for row in normals:
-        totals['min_temp'] = row[0][0]
-        totals['avg_temp'] = row[0][1]
-        totals['max_temp'] = row[0][2]
-        totals['date'] = row[0][3]
-        days.append(totals)
-    return jsonify(days)
-
-
-
-@app.route("/api/v1.0/start_end")
-def start_end():
-    session = Session(engine)
-    def daily_normals(date):
-        sel = [func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)]
-        return session.query(*sel, Measurement.date).filter(func.strftime("%m-%d", Measurement.date) == date).all()
-    start_date = input('When will your vacation begin? (yyyy-mm-dd)')
-    end_date = input('When will you return? (yyyy-mm-dd)')
-    t_dates = pd.to_datetime(np.arange(start_date,end_date, dtype='datetime64'))
-    tr_dates = []
-    for date in t_dates:
-        tr_dates.append(dt.datetime.strftime(date, "%m-%d"))
-    normals = []
-    for date in tr_dates:
-        normals.append(daily_normals(date))
-    days = []
-    totals = {}
-    for row in normals:
-        totals['min_temp'] = row[0][0]
-        totals['avg_temp'] = row[0][1]
-        totals['max_temp'] = row[0][2]
-        totals['date'] = row[0][3]
-        days.append(totals)
-    return jsonify(days)
+    if end == '':
+        end = '2017-08-24'
+    results = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs), Measurement.date).\
+        filter(Measurement.date >= start).filter(Measurement.date <= end).group_by(Measurement.date).all() 
+    
+    dailys = []
+    for min_temp, avg_temp, max_temp, date in results:
+        day_dict = {}
+        day_dict['min_temp'] = min_temp
+        day_dict['avg_temp'] = avg_temp
+        day_dict['max_temp'] = max_temp
+        day_dict['date'] = dt.datetime.strftime(pd.to_datetime(date), '%m-%d')
+        dailys.append(day_dict)
+    
+    return jsonify(dailys)
 
 if __name__ == '__main__':
     app.run(debug=True)
